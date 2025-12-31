@@ -94,9 +94,6 @@ router.post('/signup', async (req, res) => {
     }
 });
 
-const { OAuth2Client } = require('google-auth-library');
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
 // Login
 router.post('/login', async (req, res) => {
     try {
@@ -125,40 +122,6 @@ router.post('/login', async (req, res) => {
             }
             res.status(400).json({ message: 'Invalid email or password' });
         }
-    } catch (err) {
-        console.error('Login Error:', err.message);
-        res.status(400).json({ message: 'Error logging in', error: err.message });
-    }
-});
-
-// Google Login
-router.post('/google-login', async (req, res) => {
-    try {
-        const { token } = req.body;
-        const ticket = await client.verifyIdToken({
-            idToken: token,
-            audience: process.env.GOOGLE_CLIENT_ID
-        });
-        const { name, email, picture } = ticket.getPayload();
-
-        let user = await User.findOne({ email: email.toLowerCase() });
-        const isAdmin = email.trim().toLowerCase() === (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-
-        if (!user) {
-            // Create user if not exists (using a random password for social login users)
-            user = new User({
-                name,
-                email: email.toLowerCase(),
-                password: Math.random().toString(36).slice(-8),
-                isAdmin
-            });
-            await user.save();
-        } else if (isAdmin && !user.isAdmin) {
-            user.isAdmin = true;
-            await user.save();
-        }
-
-        res.json({ message: 'Login success!', user });
     } catch (err) {
         console.error('Login Error:', err.message);
         res.status(400).json({ message: 'Error logging in', error: err.message });
