@@ -7,6 +7,10 @@ const bcrypt = require('bcryptjs');
 // Configure Email Transporter
 const transporter = nodemailer.createTransport({
     service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    pool: true, // Reuse connections for speed
     auth: {
         user: process.env.SENDER_EMAIL,
         pass: process.env.EMAIL_APP_PASSWORD
@@ -28,9 +32,10 @@ const otpStore = {};
 // 1. SEND OTP ROUTE
 router.post('/send-otp', async (req, res) => {
     try {
-        const { email } = req.body;
+        let { email } = req.body;
         if (!email) return res.status(400).json({ message: 'Email is required' });
 
+        email = email.trim().toLowerCase(); // Normalize email
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         otpStore[email] = { otp, expires: Date.now() + 5 * 60 * 1000 };
 
@@ -50,25 +55,45 @@ router.post('/send-otp', async (req, res) => {
             `
         };
 
-        await transporter.sendMail(mailOptions);
-        res.json({ message: 'Verification code sent to email!' });
+        console.log(`🚀 Sending OTP to: ${email}...`);
+
+        // Return response INSTANTLY to the user
+        res.json({ message: 'Verification code is being sent! Check your email.' });
+
+        // Actually send the mail in the background
+        transporter.sendMail(mailOptions)
+            .then(() => console.log(`✅ Background: OTP sent successfully to: ${email}`))
+            .catch(err => console.error('❌ Background: OTP SEND ERROR:', err));
+
     } catch (err) {
-        res.status(500).json({ message: 'Error sending verification code', error: err.message });
+        console.error('❌ OTP ROUTE ERROR:', err);
+        res.status(500).json({ message: 'Error processing verification request', error: err.message });
     }
 });
 
 // Signup with Hashing
 router.post('/signup', async (req, res) => {
     try {
-        const { name, email, password, phone, otp } = req.body;
+        let { name, email, password, phone, otp } = req.body;
+        email = email.trim().toLowerCase(); // Normalize email
 
+        console.log(`📝 Signup attempt for: ${email}`);
         const record = otpStore[email];
-        if (!record || record.otp !== otp) {
-            return res.status(400).json({ message: 'Invalid code. Please request a new one.' });
+
+        if (!record) {
+            console.log(`❌ No OTP record found for: ${email}`);
+            return res.status(400).json({ message: 'No verification code was sent to this email.' });
         }
+
+        if (record.otp !== otp) {
+            console.log(`❌ Invalid OTP. Expected: ${record.otp}, Got: ${otp}`);
+            return res.status(400).json({ message: 'Invalid verification code.' });
+        }
+
         if (Date.now() > record.expires) {
             delete otpStore[email];
-            return res.status(400).json({ message: 'Code expired.' });
+            console.log(`❌ OTP expired for: ${email}`);
+            return res.status(400).json({ message: 'Verification code expired.' });
         }
 
         delete otpStore[email];
@@ -83,7 +108,8 @@ router.post('/signup', async (req, res) => {
 
         res.json({ message: 'User created!', user });
     } catch (err) {
-        if (err.code === 11000) return res.status(400).json({ message: 'User already exists.' });
+        console.error('❌ SIGNUP ERROR:', err);
+        if (err.code === 11000) return res.status(400).json({ message: 'This email is already registered. Please try logging in.' });
         res.status(400).json({ message: 'Error creating user', error: err.message });
     }
 });
