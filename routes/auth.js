@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const nodemailer = require('nodemailer');
+const bcrypt = require('bcryptjs');
 
 // Configure Email Transporter
 const transporter = nodemailer.createTransport({
@@ -21,7 +22,7 @@ transporter.verify((error, success) => {
     }
 });
 
-// Temporary memory store for OTPs (In a big app, use Redis or Database)
+// Temporary memory store for OTPs
 const otpStore = {};
 
 // 1. SEND OTP ROUTE
@@ -30,14 +31,8 @@ router.post('/send-otp', async (req, res) => {
         const { email } = req.body;
         if (!email) return res.status(400).json({ message: 'Email is required' });
 
-        // Generate 6-digit OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-        // Store in memory with 5-minute expiry
-        otpStore[email] = {
-            otp,
-            expires: Date.now() + 5 * 60 * 1000
-        };
+        otpStore[email] = { otp, expires: Date.now() + 5 * 60 * 1000 };
 
         const mailOptions = {
             from: `"SHIV SHAKTI VERIFICATION" <${process.env.SENDER_EMAIL}>`,
@@ -56,35 +51,34 @@ router.post('/send-otp', async (req, res) => {
         };
 
         await transporter.sendMail(mailOptions);
-        console.log(`✅ OTP sent to ${email}: ${otp}`);
         res.json({ message: 'Verification code sent to email!' });
     } catch (err) {
-        console.error('❌ OTP ERROR DETAILS:', err);
         res.status(500).json({ message: 'Error sending verification code', error: err.message });
     }
 });
 
-// Update Signup to check OTP
+// Signup with Hashing
 router.post('/signup', async (req, res) => {
     try {
         const { name, email, password, phone, otp } = req.body;
 
-        // Check OTP
         const record = otpStore[email];
         if (!record || record.otp !== otp) {
             return res.status(400).json({ message: 'Invalid code. Please request a new one.' });
         }
         if (Date.now() > record.expires) {
             delete otpStore[email];
-            return res.status(400).json({ message: 'Code expired. Please request a new one.' });
+            return res.status(400).json({ message: 'Code expired.' });
         }
 
-        // Clean memory
         delete otpStore[email];
 
-        console.log('Attempting signup for:', email);
+        // Hash password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
         const isAdmin = email.trim().toLowerCase() === (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-        const user = new User({ name, email: email.trim(), password, phone, isAdmin });
+        const user = new User({ name, email: email.trim(), password: hashedPassword, phone, isAdmin });
         await user.save();
 
         res.json({ message: 'User created!', user });
@@ -94,48 +88,57 @@ router.post('/signup', async (req, res) => {
     }
 });
 
-// Login
+// Login with Verification
 router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
-        console.log('Login attempt for:', email.trim());
-        const user = await User.findOne({ email: email.trim(), password });
-        if (user) {
-            console.log('User found in DB:', user.email);
-            // Also check Admin status on login to handle accounts created before the change
-            const isAdminEmail = email.trim().toLowerCase() === (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-            console.log('Admin email match:', isAdminEmail);
-            if (isAdminEmail && !user.isAdmin) {
-                user.isAdmin = true;
-                await user.save();
-                console.log('User upgraded to Admin');
-            }
-            res.json({ message: 'Login success!', user });
-        } else {
-            console.log('Login failed: Email or password incorrect for', email.trim());
-            // Check if user even exists
-            const existingUser = await User.findOne({ email: email.trim() });
-            if (!existingUser) {
-                console.log('Reason: User does not exist in database.');
-            } else {
-                console.log('Reason: Password does not match.');
-            }
-            res.status(400).json({ message: 'Invalid email or password' });
+        const user = await User.findOne({ email: email.trim() });
+
+        if (!user) {
+            return res.status(400).json({ message: 'Invalid email or password' });
         }
+
+        // Check password
+        let isMatch = await bcrypt.compare(password, user.password);
+
+        // MIGRATION: If not a hashed match, check if it's an old plain-text password
+        if (!isMatch && password === user.password) {
+            console.log('Migrating old plain-text password for:', user.email);
+            const salt = await bcrypt.genSalt(10);
+            user.password = await bcrypt.hash(password, salt);
+            await user.save();
+            isMatch = true; // Mark as matched after migration
+        }
+
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Invalid email or password' });
+        }
+
+        // Auto-upgrade to Admin if email matches
+        const isAdminEmail = email.trim().toLowerCase() === (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+        if (isAdminEmail && !user.isAdmin) {
+            user.isAdmin = true;
+            await user.save();
+        }
+
+        res.json({ message: 'Login success!', user });
     } catch (err) {
-        console.error('Login Error:', err.message);
         res.status(400).json({ message: 'Error logging in', error: err.message });
     }
 });
 
-// Update Profile (Phone)
+// Update Profile with hashing if needed
 router.post('/update-profile', async (req, res) => {
     try {
-        const { userId, phone, password } = req.body;
+        const { userId, name, phone, password } = req.body;
         const user = await User.findById(userId);
         if (user) {
+            if (name) user.name = name;
             if (phone) user.phone = phone;
-            if (password) user.password = password; // In a real app, hash this!
+            if (password) {
+                const salt = await bcrypt.genSalt(10);
+                user.password = await bcrypt.hash(password, salt);
+            }
             await user.save();
             res.json({ message: 'Profile updated!', user });
         } else {
