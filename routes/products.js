@@ -48,15 +48,17 @@ router.post('/', upload.single('imageFile'), async (req, res) => {
 
         const productData = {
             name,
-            price: Number(price),
+            price: Number(price) || 0, // Ensure price is a valid number
             description,
             category,
             image: req.body.image // default to URL if provided
         };
 
-        // If an image file was uploaded, use its local path
+        // If an image file was uploaded, use the dynamic server host
         if (req.file) {
-            productData.image = `http://localhost:5000/uploads/${req.file.filename}`;
+            const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+            const host = req.get('host');
+            productData.image = `${protocol}://${host}/uploads/${req.file.filename}`;
         }
 
         if (!productData.image) {
