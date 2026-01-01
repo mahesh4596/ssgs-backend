@@ -12,20 +12,28 @@ app.use(cors());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // MongoDB Setup
-const rawURI = process.env.MONGO_URI || "";
-const mongoURI = rawURI.trim(); // 🚀 FIX: Removes any accidental spaces from Render dashboard
+const mongoURI = (process.env.MONGO_URI || "").trim();
 const maskedURI = mongoURI ? mongoURI.replace(/\/\/.*@/, "//****:****@") : "MISSING";
-
 console.log(`📡 DB Connection: ${maskedURI}`);
 
-// Enable buffering so requests wait for the connection instead of failing instantly
-mongoose.set('bufferCommands', true);
+// MongoDB Listeners for Deep Debugging
+mongoose.connection.on('error', err => {
+  console.error('❌ MONGODB EVENT ERROR:', err.message);
+});
 
-mongoose.connect(mongoURI)
+mongoose.connection.on('disconnected', () => {
+  console.log('⚠️ MongoDB Disconnected. Re-attempting...');
+});
+
+mongoose.connect(mongoURI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 10000,
+})
   .then(() => console.log('✅ Connected to MongoDB Successfully!'))
   .catch(err => {
-    console.error('❌ MONGODB CONNECTION ERROR:');
-    console.error(err.message);
+    console.error('❌ MONGODB INITIAL CONNECTION ERROR:');
+    console.error(err); // Log the full error object
   });
 
 // Simple Route
