@@ -12,7 +12,8 @@ app.use(cors());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // MongoDB Setup
-const mongoURI = process.env.MONGO_URI;
+const rawURI = process.env.MONGO_URI || "";
+const mongoURI = rawURI.trim(); // 🚀 FIX: Removes any accidental spaces from Render dashboard
 const maskedURI = mongoURI ? mongoURI.replace(/\/\/.*@/, "//****:****@") : "MISSING";
 
 console.log(`📡 DB Connection: ${maskedURI}`);

@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcryptjs');
+const mongoose = require('mongoose');
 
 // Signup with Hashing
 router.post('/signup', async (req, res) => {
@@ -11,6 +12,7 @@ router.post('/signup', async (req, res) => {
         email = email.trim().toLowerCase(); // Normalize email
 
         console.log(`📝 Signup attempt for: ${email}`);
+        console.log(`📡 Current DB State: ${mongoose.connection.readyState} (1=Connected)`);
 
         // Hash password
         const salt = await bcrypt.genSalt(10);
