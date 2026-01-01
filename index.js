@@ -26,14 +26,12 @@ mongoose.connection.on('disconnected', () => {
 });
 
 mongoose.connect(mongoURI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 10000,
+  serverSelectionTimeoutMS: 15000, // Slightly longer timeout for cold starts
 })
   .then(() => console.log('✅ Connected to MongoDB Successfully!'))
   .catch(err => {
     console.error('❌ MONGODB INITIAL CONNECTION ERROR:');
-    console.error(err); // Log the full error object
+    console.error(err.message);
   });
 
 // Simple Route
@@ -51,10 +49,17 @@ const PORT = process.env.PORT || 5000;
 
 // Production setup (Only if you still want to serve frontend from backend)
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../frontend/dist')));
-  app.get('*path', (req, res) => {
-    res.sendFile(path.resolve(__dirname, '../frontend', 'dist', 'index.html'));
-  });
+  const fs = require('fs');
+  const distPath = path.join(__dirname, '../frontend/dist');
+
+  if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.resolve(distPath, 'index.html'));
+    });
+  } else {
+    console.log('💡 Note: Frontend dist folder not found. Running as standalone API.');
+  }
 }
 
 app.listen(PORT, () => {
