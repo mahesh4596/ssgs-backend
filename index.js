@@ -12,9 +12,19 @@ app.use(cors());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/cosmetic-shop')
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.log('MongoDB connection error:', err));
+const mongoURI = process.env.MONGO_URI;
+console.log('📡 Attempting to connect to MongoDB...');
+
+mongoose.connect(mongoURI, {
+  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+  socketTimeoutMS: 45000,
+})
+  .then(() => console.log('✅ Connected to MongoDB Successfully!'))
+  .catch(err => {
+    console.error('❌ MONGODB CONNECTION ERROR:');
+    console.error(err.message);
+    if (!mongoURI) console.error('⚠️  HINT: MONGO_URI is not defined in your .env file!');
+  });
 
 // Simple Route
 app.get('/', (req, res) => {
