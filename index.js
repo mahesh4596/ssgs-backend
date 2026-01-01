@@ -18,8 +18,8 @@ const maskedURI = mongoURI ? mongoURI.replace(/\/\/.*@/, "//****:****@") : "MISS
 
 console.log(`📡 DB Connection: ${maskedURI}`);
 
-// Disable buffering so it fails fast instead of hanging
-mongoose.set('bufferCommands', false);
+// Enable buffering so requests wait for the connection instead of failing instantly
+mongoose.set('bufferCommands', true);
 
 mongoose.connect(mongoURI)
   .then(() => console.log('✅ Connected to MongoDB Successfully!'))
