@@ -47,8 +47,7 @@ router.post('/', async (req, res) => {
         });
         console.log('-------------------------------\n\n');
 
-        // --- STEP 2: TELEGRAM NOTIFICATION (DISABLED) ---
-        /*
+        // --- STEP 2: TELEGRAM NOTIFICATION ---
         if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
             const botToken = process.env.TELEGRAM_BOT_TOKEN;
             const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -64,10 +63,8 @@ router.post('/', async (req, res) => {
                 console.error('❌ Telegram Failed:', err.response?.data || err.message);
             });
         }
-        */
 
-        // --- STEP 3: EMAIL NOTIFICATION (DISABLED) ---
-        /*
+        // --- STEP 3: EMAIL NOTIFICATION ---
         if (process.env.EMAIL_APP_PASSWORD && process.env.EMAIL_APP_PASSWORD !== 'your_gmail_app_password_here') {
 
             const mailOptions = {
@@ -90,6 +87,8 @@ router.post('/', async (req, res) => {
                 `
             };
 
+
+
             transporter.sendMail(mailOptions, (error, info) => {
                 if (error) {
                     console.error('❌ EMAIL ERROR:', error.message);
@@ -101,7 +100,6 @@ router.post('/', async (req, res) => {
         } else {
             console.log('⚠️ EMAIL SKIPPED: EMAIL_APP_PASSWORD is not set in .env');
         }
-        */
 
         res.json({ message: 'Order created!', order });
     } catch (err) {

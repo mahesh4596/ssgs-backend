@@ -56,9 +56,10 @@ router.post('/', upload.single('imageFile'), async (req, res) => {
 
         // If an image file was uploaded, use the dynamic server host
         if (req.file) {
-            const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+            const protocol = req.headers['x-forwarded-proto'] || 'https'; // Force https for Render
             const host = req.get('host');
             productData.image = `${protocol}://${host}/uploads/${req.file.filename}`;
+            console.log(`🖼️ Image Uploaded: ${productData.image}`);
         }
 
         if (!productData.image) {
