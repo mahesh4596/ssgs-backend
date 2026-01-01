@@ -4,99 +4,13 @@ const User = require('../models/User');
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcryptjs');
 
-// Configure Email Transporter
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    pool: true, // Reuse connections for speed
-    auth: {
-        user: process.env.SENDER_EMAIL,
-        pass: process.env.EMAIL_APP_PASSWORD
-    }
-});
-
-// Verify connection configuration
-transporter.verify((error, success) => {
-    if (error) {
-        console.error('❌ AUTH EMAIL CONNECTION FAILED:', error.message);
-    } else {
-        console.log('📧 Auth Email Server is ready! ✅');
-    }
-});
-
-// Temporary memory store for OTPs
-const otpStore = {};
-
-// 1. SEND OTP ROUTE
-router.post('/send-otp', async (req, res) => {
-    try {
-        let { email } = req.body;
-        if (!email) return res.status(400).json({ message: 'Email is required' });
-
-        email = email.trim().toLowerCase(); // Normalize email
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        otpStore[email] = { otp, expires: Date.now() + 5 * 60 * 1000 };
-
-        const mailOptions = {
-            from: `"SHIV SHAKTI VERIFICATION" <${process.env.SENDER_EMAIL}>`,
-            to: email,
-            subject: '🌸 Your Verification Code for Shiv Shakti',
-            html: `
-                <div style="font-family: sans-serif; padding: 20px; border: 2px solid #ff0080; border-radius: 20px; text-align: center;">
-                    <h1 style="color: #ff0080;">Welcome to Shiv Shakti!</h1>
-                    <p style="font-size: 16px; color: #555;">Your secret code to create an account is:</p>
-                    <div style="background: #fff0f6; padding: 20px; border-radius: 15px; display: inline-block;">
-                        <span style="font-size: 32px; font-weight: 900; letter-spacing: 10px; color: #ff0080;">${otp}</span>
-                    </div>
-                    <p style="color: #888; font-size: 12px; margin-top: 20px;">This code will expire in 5 minutes.</p>
-                </div>
-            `
-        };
-
-        console.log(`🚀 Sending OTP to: ${email}...`);
-
-        // Return response INSTANTLY to the user
-        res.json({ message: 'Verification code is being sent! Check your email.' });
-
-        // Actually send the mail in the background
-        transporter.sendMail(mailOptions)
-            .then(() => console.log(`✅ Background: OTP sent successfully to: ${email}`))
-            .catch(err => console.error('❌ Background: OTP SEND ERROR:', err));
-
-    } catch (err) {
-        console.error('❌ OTP ROUTE ERROR:', err);
-        res.status(500).json({ message: 'Error processing verification request', error: err.message });
-    }
-});
-
 // Signup with Hashing
 router.post('/signup', async (req, res) => {
     try {
-        let { name, email, password, phone, otp } = req.body;
+        let { name, email, password, phone } = req.body;
         email = email.trim().toLowerCase(); // Normalize email
 
         console.log(`📝 Signup attempt for: ${email}`);
-        const record = otpStore[email];
-
-        if (!record) {
-            console.log(`❌ No OTP record found for: ${email}`);
-            return res.status(400).json({ message: 'No verification code was sent to this email.' });
-        }
-
-        if (record.otp !== otp) {
-            console.log(`❌ Invalid OTP. Expected: ${record.otp}, Got: ${otp}`);
-            return res.status(400).json({ message: 'Invalid verification code.' });
-        }
-
-        if (Date.now() > record.expires) {
-            delete otpStore[email];
-            console.log(`❌ OTP expired for: ${email}`);
-            return res.status(400).json({ message: 'Verification code expired.' });
-        }
-
-        delete otpStore[email];
 
         // Hash password
         const salt = await bcrypt.genSalt(10);
@@ -113,6 +27,7 @@ router.post('/signup', async (req, res) => {
         res.status(400).json({ message: 'Error creating user', error: err.message });
     }
 });
+
 
 // Login with Verification
 router.post('/login', async (req, res) => {
