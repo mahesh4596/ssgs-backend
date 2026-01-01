@@ -22,9 +22,9 @@ router.post('/signup', async (req, res) => {
 
         res.json({ message: 'User created!', user });
     } catch (err) {
-        console.error('❌ SIGNUP ERROR:', err);
+        console.error('❌ SIGNUP ERROR DETAILS:', err);
         if (err.code === 11000) return res.status(400).json({ message: 'This email is already registered. Please try logging in.' });
-        res.status(400).json({ message: 'Error creating user', error: err.message });
+        res.status(400).json({ message: 'Error: ' + err.message });
     }
 });
 
