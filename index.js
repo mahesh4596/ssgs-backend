@@ -11,19 +11,20 @@ app.use(express.json());
 app.use(cors());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Connect to MongoDB
+// MongoDB Setup
 const mongoURI = process.env.MONGO_URI;
-console.log('📡 Attempting to connect to MongoDB...');
+const maskedURI = mongoURI ? mongoURI.replace(/\/\/.*@/, "//****:****@") : "MISSING";
 
-mongoose.connect(mongoURI, {
-  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-  socketTimeoutMS: 45000,
-})
+console.log(`📡 DB Connection: ${maskedURI}`);
+
+// Disable buffering so it fails fast instead of hanging
+mongoose.set('bufferCommands', false);
+
+mongoose.connect(mongoURI)
   .then(() => console.log('✅ Connected to MongoDB Successfully!'))
   .catch(err => {
     console.error('❌ MONGODB CONNECTION ERROR:');
     console.error(err.message);
-    if (!mongoURI) console.error('⚠️  HINT: MONGO_URI is not defined in your .env file!');
   });
 
 // Simple Route
