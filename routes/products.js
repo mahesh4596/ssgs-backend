@@ -45,39 +45,41 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// Add product (Admin) - Supports both URL and File Upload
-router.post('/', upload.single('imageFile'), async (req, res) => {
+// Add product (Admin) - Supports multiple uploads
+router.post('/', upload.array('imageFiles', 5), async (req, res) => {
     try {
         const { name, price, description, category } = req.body;
+        const images = [];
 
-        const productData = {
+        // Handle uploaded files from Cloudinary
+        if (req.files && req.files.length > 0) {
+            req.files.forEach(file => images.push(file.path));
+            console.log(`☁️ Cloudinary Multi-Upload: ${images.length} images saved.`);
+        }
+
+        // Handle URL inputs (if any) - split by comma if multiple
+        if (req.body.image) {
+            const extraUrls = req.body.image.split(',').map(u => u.trim()).filter(u => u);
+            images.push(...extraUrls);
+        }
+
+        if (images.length === 0) {
+            return res.status(400).json({ message: 'Error: At least one image is required.' });
+        }
+
+        const product = new Product({
             name,
             price: Number(price) || 0,
             description,
             category,
-            image: req.body.image // default to URL if provided
-        };
+            images
+        });
 
-        // If an image was uploaded to Cloudinary
-        if (req.file) {
-            productData.image = req.file.path; // Cloudinary returns the secure URL in path
-            console.log(`☁️ Cloudinary Upload Success: ${productData.image}`);
-        }
-
-        if (!productData.image) {
-            return res.status(400).json({ message: 'Error: Image is required. Please select a file or paste a URL.' });
-        }
-
-        const product = new Product(productData);
         await product.save();
-        res.json({ message: 'Product added!', product });
+        res.json({ message: 'Product created with gallery!', product });
     } catch (err) {
-        console.error('Add Product Error:', err);
-        let errorMsg = err.message;
-        if (err.name === 'ValidationError') {
-            errorMsg = Object.values(err.errors).map(val => val.message).join(', ');
-        }
-        res.status(400).json({ message: 'Error: ' + errorMsg });
+        console.error('Multi-Product Add Error:', err);
+        res.status(400).json({ message: 'Error: ' + err.message });
     }
 });
 
