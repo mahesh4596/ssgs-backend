@@ -62,15 +62,19 @@ router.post('/', upload.single('imageFile'), async (req, res) => {
         }
 
         if (!productData.image) {
-            return res.status(400).json({ message: 'Image is required. Please select a file or paste a URL.' });
+            return res.status(400).json({ message: 'Error: Image is required. Please select a file or paste a URL.' });
         }
 
         const product = new Product(productData);
         await product.save();
         res.json({ message: 'Product added!', product });
     } catch (err) {
-        console.error('Add Product Error:', err.message);
-        res.status(400).json({ message: 'Error adding product', error: err.message });
+        console.error('Add Product Error:', err);
+        let errorMsg = err.message;
+        if (err.name === 'ValidationError') {
+            errorMsg = Object.values(err.errors).map(val => val.message).join(', ');
+        }
+        res.status(400).json({ message: 'Error: ' + errorMsg });
     }
 });
 
