@@ -5,18 +5,22 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Configure Multer for local storage
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadDir = 'uploads/';
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir);
-        }
-        cb(null, uploadDir);
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+// Configure Cloudinary
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: 'ssgs_products',
+        allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
     },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
-    }
 });
 
 const upload = multer({ storage: storage });
@@ -48,18 +52,16 @@ router.post('/', upload.single('imageFile'), async (req, res) => {
 
         const productData = {
             name,
-            price: Number(price) || 0, // Ensure price is a valid number
+            price: Number(price) || 0,
             description,
             category,
             image: req.body.image // default to URL if provided
         };
 
-        // If an image file was uploaded, use the dynamic server host
+        // If an image was uploaded to Cloudinary
         if (req.file) {
-            const protocol = req.headers['x-forwarded-proto'] || 'https'; // Force https for Render
-            const host = req.get('host');
-            productData.image = `${protocol}://${host}/uploads/${req.file.filename}`;
-            console.log(`🖼️ Image Uploaded: ${productData.image}`);
+            productData.image = req.file.path; // Cloudinary returns the secure URL in path
+            console.log(`☁️ Cloudinary Upload Success: ${productData.image}`);
         }
 
         if (!productData.image) {
