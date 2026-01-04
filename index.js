@@ -39,6 +39,11 @@ app.get('/', (req, res) => {
   res.send('Cosmetic Shop Backend is running!');
 });
 
+// API Health Check
+app.get('/api', (req, res) => {
+  res.send('API is active!');
+});
+
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/products', require('./routes/products'));
