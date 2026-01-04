@@ -12,20 +12,16 @@ if (!process.env.SENDER_EMAIL || !process.env.EMAIL_APP_PASSWORD) {
 
 // Configure Email Transporter
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // Use STARTTLS
+    service: 'gmail',
     auth: {
         user: (process.env.SENDER_EMAIL || '').trim(),
         pass: (process.env.EMAIL_APP_PASSWORD || '').trim()
     },
-    tls: {
-        rejectUnauthorized: false,
-        minVersion: "TLSv1.2"
-    },
-    connectionTimeout: 30000, // 30 seconds
+    debug: true, // Show debug info in logs
+    logger: true, // Log to console
+    connectionTimeout: 30000,
     greetingTimeout: 30000,
-    socketTimeout: 45000
+    socketTimeout: 60000
 });
 
 // Detailed connectivity verification
@@ -61,29 +57,31 @@ router.post('/send-code', async (req, res) => {
         }
 
         user.verificationCode = code;
-        await user.save();
 
         // Send Email
         const mailOptions = {
-            from: `"SHIV SHAKTI BOT" <${process.env.SENDER_EMAIL}>`,
+            from: `"SHIV SHAKTI" <${process.env.SENDER_EMAIL}>`,
             to: email,
-            subject: `🌸 YOUR VERIFICATION CODE: ${code}`,
+            subject: `🌸 OTP: ${code}`,
             html: `
-                <div style="font-family: sans-serif; padding: 20px; border: 2px solid #ff0080; border-radius: 20px; max-width: 400px;">
+                <div style="font-family: sans-serif; padding: 20px; border: 2px solid #ff0080; border-radius: 20px; max-width: 400px; margin: auto;">
                     <h1 style="color: #ff0080; text-align: center;">Shiv Shakti Store 🌸</h1>
-                    <p style="font-size: 16px; color: #333;">Hello!</p>
-                    <p style="font-size: 16px; color: #333;">Use the code below to verify your account and start your glow journey:</p>
+                    <p style="font-size: 16px; color: #333; text-align: center;">Your verification code is:</p>
                     <div style="background: #fff0f6; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0;">
                         <span style="font-size: 40px; font-weight: 900; letter-spacing: 10px; color: #ff0080;">${code}</span>
                     </div>
-                    <p style="font-size: 12px; color: #999; text-align: center;">If you didn't request this, please ignore this email.</p>
+                    <p style="font-size: 12px; color: #999; text-align: center;">Use this code to complete your registration.</p>
                 </div>
             `
         };
 
-        // Attempt sending with a slight retry/wait if it's the first connection
+        // --- ATTEMPT SENDING FIRST ---
         await transporter.sendMail(mailOptions);
-        console.log(`📧 Code ${code} sent to ${email}`);
+
+        // --- ONLY SAVE TO DB IF EMAIL SUCCEEDS ---
+        await user.save();
+
+        console.log(`📧 Code ${code} sent to ${email} AND saved to DB! ✅`);
         res.json({ message: 'Code sent to your email! ✅' });
 
     } catch (err) {
