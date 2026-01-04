@@ -13,24 +13,27 @@ if (!process.env.SENDER_EMAIL || !process.env.EMAIL_APP_PASSWORD) {
 // Configure Email Transporter
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // use STARTTLS
+    port: 465,
+    secure: true, // Use SSL
     auth: {
         user: process.env.SENDER_EMAIL,
         pass: process.env.EMAIL_APP_PASSWORD
     },
-    connectionTimeout: 10000, // 10 seconds
-    greetingTimeout: 10000,
-    socketTimeout: 20000
+    tls: {
+        rejectUnauthorized: false // Helps avoid handshake timeouts on some networks
+    },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 30000
 });
 
-// Verify connectivity
+// Detailed connectivity verification
 transporter.verify((error, success) => {
     if (error) {
-        console.error('❌ AUTH EMAIL CONNECTION FAILED:', error.message);
-        console.log('💡 TIP: Ensure SENDER_EMAIL and EMAIL_APP_PASSWORD are set in Environment Variables.');
+        console.error('❌ EMAIL ENGINE CRITICAL ERROR:', error.message);
+        console.log('🔍 SYSTEM DEBUG: Use 16-character App Password (not your Gmail password)');
     } else {
-        console.log('📧 Auth Email Server is ready! ✅');
+        console.log('📧 Email Engine [Port 465/SSL] is Active! ✅');
     }
 });
 
