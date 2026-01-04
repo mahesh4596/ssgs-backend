@@ -8,26 +8,24 @@ const axios = require('axios'); // For Telegram
 
 // Configure Email Transporter
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
+    service: 'gmail',
     auth: {
         user: process.env.SENDER_EMAIL,
         pass: process.env.EMAIL_APP_PASSWORD
     },
-    tls: {
-        rejectUnauthorized: false
-    },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
+    pool: true, // Use a pool of connections
+    maxConnections: 1,
+    maxMessages: Infinity,
+    connectionTimeout: 20000,
+    greetingTimeout: 20000,
     socketTimeout: 30000
 });
 
 transporter.verify((error, success) => {
     if (error) {
-        console.error('❌ ORDER EMAIL ERROR:', error.message);
+        console.error('❌ EMAIL SYSTEM ERROR:', error.message);
     } else {
-        console.log('📧 Order Email Engine [Port 465/SSL] is Active! ✅');
+        console.log('📧 Email Engine [Gmail Service] is Live & Ready! ✅');
     }
 });
 
