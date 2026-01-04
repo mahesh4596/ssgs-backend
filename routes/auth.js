@@ -5,12 +5,27 @@ const nodemailer = require('nodemailer');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 
+// Presence Check for Env Vars
+if (!process.env.SENDER_EMAIL || !process.env.EMAIL_APP_PASSWORD) {
+    console.warn('⚠️ WARNING: SENDER_EMAIL or EMAIL_APP_PASSWORD is not set. Email verification will fail.');
+}
+
 // Configure Email Transporter
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
         user: process.env.SENDER_EMAIL,
         pass: process.env.EMAIL_APP_PASSWORD
+    }
+});
+
+// Verify connectivity
+transporter.verify((error, success) => {
+    if (error) {
+        console.error('❌ AUTH EMAIL CONNECTION FAILED:', error.message);
+        console.log('💡 TIP: Ensure SENDER_EMAIL and EMAIL_APP_PASSWORD are set in Environment Variables.');
+    } else {
+        console.log('📧 Auth Email Server is ready! ✅');
     }
 });
 
@@ -111,8 +126,9 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ message: 'Invalid email or password' });
         }
 
-        if (!user.isVerified && user.password !== 'temp') {
-            return res.status(400).json({ message: 'Please verify your email before logging in.' });
+        // Only block if we explicitly know they are unverified AND it's a temporary signup doc
+        if (user.isVerified === false && user.password === 'temp') {
+            return res.status(400).json({ message: 'Account not verified. Please use the verification code sent to your email during signup.' });
         }
 
         // Check password
