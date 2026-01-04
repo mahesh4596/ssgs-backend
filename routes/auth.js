@@ -12,17 +12,20 @@ if (!process.env.SENDER_EMAIL || !process.env.EMAIL_APP_PASSWORD) {
 
 // Configure Email Transporter
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // Use STARTTLS
     auth: {
-        user: process.env.SENDER_EMAIL,
-        pass: process.env.EMAIL_APP_PASSWORD
+        user: (process.env.SENDER_EMAIL || '').trim(),
+        pass: (process.env.EMAIL_APP_PASSWORD || '').trim()
     },
-    pool: true, // Keep connections open
-    maxConnections: 5,
-    maxMessages: 100,
-    connectionTimeout: 20000,
-    greetingTimeout: 20000,
-    socketTimeout: 30000
+    tls: {
+        rejectUnauthorized: false,
+        minVersion: "TLSv1.2"
+    },
+    connectionTimeout: 30000, // 30 seconds
+    greetingTimeout: 30000,
+    socketTimeout: 45000
 });
 
 // Detailed connectivity verification
