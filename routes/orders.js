@@ -8,18 +8,16 @@ const axios = require('axios'); // For Telegram
 
 // Configure Email Transporter
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
+    service: 'gmail',
     auth: {
         user: process.env.SENDER_EMAIL,
         pass: process.env.EMAIL_APP_PASSWORD
     },
-    tls: {
-        rejectUnauthorized: false
-    },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
+    pool: true,
+    maxConnections: 3,
+    maxMessages: 100,
+    connectionTimeout: 20000,
+    greetingTimeout: 20000,
     socketTimeout: 30000
 });
 

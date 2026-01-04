@@ -12,18 +12,16 @@ if (!process.env.SENDER_EMAIL || !process.env.EMAIL_APP_PASSWORD) {
 
 // Configure Email Transporter
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // Use SSL
+    service: 'gmail',
     auth: {
         user: process.env.SENDER_EMAIL,
         pass: process.env.EMAIL_APP_PASSWORD
     },
-    tls: {
-        rejectUnauthorized: false // Helps avoid handshake timeouts on some networks
-    },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
+    pool: true, // Keep connections open
+    maxConnections: 5,
+    maxMessages: 100,
+    connectionTimeout: 20000,
+    greetingTimeout: 20000,
     socketTimeout: 30000
 });
 
@@ -37,23 +35,89 @@ transporter.verify((error, success) => {
     }
 });
 
-// Signup with Hashing
-router.post('/signup', async (req, res) => {
+// 1. Send Verification Code
+router.post('/send-code', async (req, res) => {
     try {
-        let { name, email, password, phone } = req.body;
-        email = email.trim().toLowerCase(); // Normalize email
+        const { email } = req.body;
+        const code = Math.floor(1000 + Math.random() * 9000).toString(); // 4 Digit Code
 
-        // Hash password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+        // Check if user already exists and is verified
+        let user = await User.findOne({ email: email.toLowerCase().trim() });
+        if (user && user.isVerified) {
+            return res.status(400).json({ message: 'User already verified. Please Login.' });
+        }
 
-        const isAdmin = email.trim().toLowerCase() === (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-        const user = new User({ name, email: email.trim(), password: hashedPassword, phone, isAdmin, isVerified: true });
+        // If user doesn't exist, create a temporary (unverified) one
+        if (!user) {
+            user = new User({
+                name: 'Guest',
+                email: email.toLowerCase().trim(),
+                password: 'temp',
+                isVerified: false
+            });
+        }
+
+        user.verificationCode = code;
         await user.save();
 
-        res.json({ message: 'User created!', user });
+        // Send Email
+        const mailOptions = {
+            from: `"SHIV SHAKTI BOT" <${process.env.SENDER_EMAIL}>`,
+            to: email,
+            subject: `🌸 YOUR VERIFICATION CODE: ${code}`,
+            html: `
+                <div style="font-family: sans-serif; padding: 20px; border: 2px solid #ff0080; border-radius: 20px; max-width: 400px;">
+                    <h1 style="color: #ff0080; text-align: center;">Shiv Shakti Store 🌸</h1>
+                    <p style="font-size: 16px; color: #333;">Hello!</p>
+                    <p style="font-size: 16px; color: #333;">Use the code below to verify your account and start your glow journey:</p>
+                    <div style="background: #fff0f6; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0;">
+                        <span style="font-size: 40px; font-weight: 900; letter-spacing: 10px; color: #ff0080;">${code}</span>
+                    </div>
+                    <p style="font-size: 12px; color: #999; text-align: center;">If you didn't request this, please ignore this email.</p>
+                </div>
+            `
+        };
+
+        // Attempt sending with a slight retry/wait if it's the first connection
+        await transporter.sendMail(mailOptions);
+        console.log(`📧 Code ${code} sent to ${email}`);
+        res.json({ message: 'Code sent to your email! ✅' });
+
     } catch (err) {
-        if (err.code === 11000) return res.status(400).json({ message: 'This email is already registered.' });
+        console.error('❌ SEND CODE ERROR:', err);
+        res.status(400).json({ message: 'Error sending code: ' + (err.message.includes('timeout') ? 'Network Timeout. Please try again in 5 seconds.' : err.message) });
+    }
+});
+
+// 2. Signup / Verify Code
+router.post('/signup', async (req, res) => {
+    try {
+        let { name, email, password, phone, code } = req.body;
+        email = email.trim().toLowerCase();
+
+        const user = await User.findOne({ email });
+        if (!user) return res.status(400).json({ message: 'Please request a code first.' });
+
+        if (user.verificationCode !== code) {
+            return res.status(400).json({ message: 'Invalid verification code.' });
+        }
+
+        // Hash new password
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(password, salt);
+        user.name = name;
+        user.phone = phone;
+        user.isVerified = true;
+        user.verificationCode = ''; // Clear code after use
+
+        const isAdmin = email === (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+        user.isAdmin = isAdmin;
+
+        await user.save();
+
+        res.json({ message: 'Signup Successful! ✅', user });
+    } catch (err) {
+        console.error('❌ SIGNUP ERROR:', err);
         res.status(400).json({ message: 'Error: ' + err.message });
     }
 });
@@ -67,6 +131,11 @@ router.post('/login', async (req, res) => {
 
         if (!user) {
             return res.status(400).json({ message: 'Invalid email or password' });
+        }
+
+        // Only block if we explicitly know they are unverified AND it's a temporary signup doc
+        if (user.isVerified === false && user.password === 'temp') {
+            return res.status(400).json({ message: 'Account not verified. Please use the verification code sent to your email during signup.' });
         }
 
         // Check password
