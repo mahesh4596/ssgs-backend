@@ -34,85 +34,33 @@ transporter.verify((error, success) => {
     }
 });
 
-// 1. Send Verification Code
-router.post('/send-code', async (req, res) => {
-    try {
-        const { email } = req.body;
-        const code = Math.floor(1000 + Math.random() * 9000).toString(); // 4 Digit Code
-
-        // Check if user already exists and is verified
-        let user = await User.findOne({ email: email.toLowerCase().trim() });
-        if (user && user.isVerified) {
-            return res.status(400).json({ message: 'User already verified. Please Login.' });
-        }
-
-        // If user doesn't exist, create a temporary (unverified) one
-        if (!user) {
-            user = new User({
-                name: 'Guest',
-                email: email.toLowerCase().trim(),
-                password: 'temp',
-                isVerified: false
-            });
-        }
-
-        user.verificationCode = code;
-
-        // Send Email
-        const mailOptions = {
-            from: `"SHIV SHAKTI" <${process.env.SENDER_EMAIL}>`,
-            to: email,
-            subject: `🌸 OTP: ${code}`,
-            html: `
-                <div style="font-family: sans-serif; padding: 20px; border: 2px solid #ff0080; border-radius: 20px; max-width: 400px; margin: auto;">
-                    <h1 style="color: #ff0080; text-align: center;">Shiv Shakti Store 🌸</h1>
-                    <p style="font-size: 16px; color: #333; text-align: center;">Your verification code is:</p>
-                    <div style="background: #fff0f6; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0;">
-                        <span style="font-size: 40px; font-weight: 900; letter-spacing: 10px; color: #ff0080;">${code}</span>
-                    </div>
-                    <p style="font-size: 12px; color: #999; text-align: center;">Use this code to complete your registration.</p>
-                </div>
-            `
-        };
-
-        // --- ATTEMPT SENDING FIRST ---
-        await transporter.sendMail(mailOptions);
-
-        // --- ONLY SAVE TO DB IF EMAIL SUCCEEDS ---
-        await user.save();
-
-        console.log(`📧 Code ${code} sent to ${email} AND saved to DB! ✅`);
-        res.json({ message: 'Code sent to your email! ✅' });
-
-    } catch (err) {
-        console.error('❌ SEND CODE ERROR:', err);
-        res.status(400).json({ message: 'Error sending code: ' + (err.message.includes('timeout') ? 'Network Timeout. Please try again in 5 seconds.' : err.message) });
-    }
-});
-
-// 2. Signup / Verify Code
+// 1. Signup Route (Simple)
 router.post('/signup', async (req, res) => {
     try {
-        let { name, email, password, phone, code } = req.body;
+        let { name, email, password, phone } = req.body;
         email = email.trim().toLowerCase();
 
-        const user = await User.findOne({ email });
-        if (!user) return res.status(400).json({ message: 'Please request a code first.' });
-
-        if (user.verificationCode !== code) {
-            return res.status(400).json({ message: 'Invalid verification code.' });
+        // Check if user already exists
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ message: 'User already exists with this email' });
         }
 
-        // Hash new password
+        // Hash password
         const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(password, salt);
-        user.name = name;
-        user.phone = phone;
-        user.isVerified = true;
-        user.verificationCode = ''; // Clear code after use
+        const hashedPassword = await bcrypt.hash(password, salt);
 
+        // Determine if user is admin
         const isAdmin = email === (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-        user.isAdmin = isAdmin;
+
+        const user = new User({
+            name,
+            email,
+            password: hashedPassword,
+            phone,
+            isAdmin,
+            isVerified: true // Automatically verified
+        });
 
         await user.save();
 
@@ -132,11 +80,6 @@ router.post('/login', async (req, res) => {
 
         if (!user) {
             return res.status(400).json({ message: 'Invalid email or password' });
-        }
-
-        // Only block if we explicitly know they are unverified AND it's a temporary signup doc
-        if (user.isVerified === false && user.password === 'temp') {
-            return res.status(400).json({ message: 'Account not verified. Please use the verification code sent to your email during signup.' });
         }
 
         // Check password
